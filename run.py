@@ -10,26 +10,26 @@ import time
 TW_TZ = timezone(timedelta(hours=8))
 DATA_FILE = 'data.json'
 
-# 強力偽裝：讓程式看起來像真的 Chrome 瀏覽器
+# 偽裝成一般的瀏覽器
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
     'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7',
 }
 
 def clean_number(text):
     """
-    小工具：把 '即期買入31.5' 這種字串洗成 '31.5'
+    清洗工具：把 '即期買入匯率31.5280' 變回 '31.5280'
     """
     if not text: return "-"
-    # 透過正則表達式只抓取數字和小數點
+    # 只抓取「數字」與「小數點」
     match = re.search(r'\d+\.\d+', text)
     if match:
         return match.group(0)
     return text.strip()
 
 def get_bot_rates():
-    """抓取台銀 (即期)"""
+    """抓取台銀"""
     print("正在抓取台銀...")
     res = {"USD": ["-","-"], "CNY": ["-","-"]}
     try:
@@ -37,76 +37,76 @@ def get_bot_rates():
         soup = BeautifulSoup(resp.text, 'html.parser')
         for row in soup.find_all('tr'):
             text = row.text.strip()
-            # 台銀直接找 data-table 屬性，最準確
             if "美金" in text:
-                buy = row.find('td', {'data-table': '本行即期買入'}).text.strip()
-                sell = row.find('td', {'data-table': '本行即期賣出'}).text.strip()
-                res["USD"] = [buy, sell]
+                res["USD"] = [
+                    row.find('td', {'data-table': '本行即期買入'}).text.strip(),
+                    row.find('td', {'data-table': '本行即期賣出'}).text.strip()
+                ]
             if "人民幣" in text:
-                buy = row.find('td', {'data-table': '本行即期買入'}).text.strip()
-                sell = row.find('td', {'data-table': '本行即期賣出'}).text.strip()
-                res["CNY"] = [buy, sell]
+                res["CNY"] = [
+                    row.find('td', {'data-table': '本行即期買入'}).text.strip(),
+                    row.find('td', {'data-table': '本行即期賣出'}).text.strip()
+                ]
         print(f"✅ 台銀抓取成功: {res}")
     except Exception as e:
         print(f"❌ 台銀失敗: {e}")
     return res
 
 def get_sunny_rates():
-    """抓取陽信 (鎖定即期 + 清洗文字)"""
+    """抓取陽信 (新版網址 + 智慧清洗)"""
     print("正在抓取陽信...")
     res = {"USD": ["-","-"], "CNY": ["-","-"]}
     try:
-        url = "https://www.sunnybank.com.tw/net/Rate/RateQuery"
-        resp = requests.get(url, headers=HEADERS, timeout=15)
-        resp.encoding = 'utf-8' # 強制編碼避免亂碼
+        # ✅ 更新：使用公開的即時匯率查詢頁面
+        url = "https://www.sunnybank.com.tw/portal/pt/pt02003/PT02003Index.xhtml"
+        resp = requests.get(url, headers=HEADERS, timeout=20)
         
+        if resp.status_code != 200:
+            print(f"❌ 陽信連線異常: {resp.status_code}")
+            return res
+
         soup = BeautifulSoup(resp.text, 'html.parser')
         rows = soup.find_all('tr')
         
         for row in rows:
-            # 移除所有空白，方便比對
+            # 取得整列文字，移除空白
             raw_text = row.get_text(strip=True)
             tds = row.find_all('td')
             
-            # 陽信表格順序通常是：幣別(0) | 現金買(1) | 現金賣(2) | 即期買(3) | 即期賣(4)
+            # 陽信新版表格通常是：幣別 | 現鈔買 | 現鈔賣 | 即期買(Index 3) | 即期賣(Index 4)
             if len(tds) >= 5:
                 # 抓美金
                 if ("美元" in raw_text or "USD" in raw_text):
-                    # 鎖定 index 3 和 4 (即期)
+                    # 使用 clean_number 去除可能參雜的中文字
                     buy = clean_number(tds[3].text)
                     sell = clean_number(tds[4].text)
-                    # 雙重確認：如果抓到的數字是空的，試試看有沒有可能是切換了版型? 
-                    # (暫時維持鎖定3/4，因為這是最標準的結構)
-                    if buy and sell:
+                    if buy and sell and buy != "-":
                         res["USD"] = [buy, sell]
                 
                 # 抓人民幣
                 if ("人民幣" in raw_text or "CNY" in raw_text):
                     buy = clean_number(tds[3].text)
                     sell = clean_number(tds[4].text)
-                    if buy and sell:
+                    if buy and sell and buy != "-":
                         res["CNY"] = [buy, sell]
 
-        # 簡單檢查有沒有抓到
         if res["USD"][0] != "-":
-            print(f"✅ 陽信抓取成功 (已確認為即期): {res}")
+            print(f"✅ 陽信抓取成功: {res}")
         else:
-            print(f"⚠️ 陽信連線正常但沒抓到數值，可能網頁改版。Raw data length: {len(resp.text)}")
+            print("⚠️ 陽信連線成功但未找到數值 (可能是網頁改版或無資料)")
 
     except Exception as e:
-        print(f"❌ 陽信失敗: {e}")
+        print(f"❌ 陽信發生錯誤: {e}")
     
     return res
 
 def main():
-    # 取得台灣時間
     today = datetime.now(TW_TZ)
     date_str = today.strftime('%Y-%m-%d')
     print(f"📅 執行日期: {date_str}")
 
-    # 執行抓取
     bot_res = get_bot_rates()
-    time.sleep(2) # 休息2秒，模擬真人操作速度
+    time.sleep(2)
     sunny_res = get_sunny_rates()
     
     new_data = {
@@ -121,7 +121,6 @@ def main():
         "bot_cny_sell": bot_res["CNY"][1]
     }
 
-    # 讀取舊檔
     history = []
     if os.path.exists(DATA_FILE):
         try:
@@ -130,11 +129,10 @@ def main():
                 if content: history = json.load(f)
         except: pass
     
-    # 更新今天的資料
+    # 更新資料
     history = [d for d in history if d['date'] != date_str]
     history.append(new_data)
     
-    # 存檔
     with open(DATA_FILE, 'w', encoding='utf-8') as f:
         json.dump(history, f, ensure_ascii=False, indent=4)
     print("🚀 資料更新完畢！")
