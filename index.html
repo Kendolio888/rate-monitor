@@ -7,22 +7,70 @@
     <style>
         body { font-family: "Microsoft JhengHei", sans-serif; background: #f4f4f4; padding: 20px; }
         .container { max-width: 1200px; margin: 0 auto; background: #fff; padding: 20px; box-shadow: 0 0 10px rgba(0,0,0,0.1); border-radius: 8px; }
-        h2 { text-align: center; color: #333; }
-        .status { text-align: center; color: #666; font-size: 0.9em; margin-bottom: 10px; }
+        h2 { text-align: center; color: #333; margin-bottom: 10px; }
+        .status { text-align: center; color: #666; font-size: 0.9em; margin-bottom: 20px; }
+        
+        /* 篩選器樣式 */
+        .filter-box {
+            background-color: #eafaf1;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            align-items: center;
+        }
+        .filter-box select {
+            padding: 8px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .filter-box label { font-weight: bold; color: #444; }
+
         table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
         th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
         th { background-color: #6a9e6f; color: white; white-space: nowrap; }
-        tr:nth-child(even) { background-color: #eafaf1; }
+        tr:nth-child(even) { background-color: #f9f9f9; } /* 改淡一點避免跟篩選器混淆 */
         tr:hover { background-color: #d1f2eb; }
         td:first-child { font-weight: bold; color: #444; }
         .table-wrapper { overflow-x: auto; }
+        .no-data { text-align: center; color: red; padding: 20px; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <h2>📈 每日匯率自動追蹤表</h2>
-    <div class="status">資料來源：data.json (由 Python 自動生成)</div>
+    <div class="status">資料來源：data.json (每日 09:30 自動更新，遇假日自動順延)</div>
+
+    <div class="filter-box">
+        <div>
+            <label for="yearFilter">年份：</label>
+            <select id="yearFilter">
+                <option value="all">全部年份</option>
+            </select>
+        </div>
+        <div>
+            <label for="monthFilter">月份：</label>
+            <select id="monthFilter">
+                <option value="all">全部月份</option>
+                <option value="01">01月</option>
+                <option value="02">02月</option>
+                <option value="03">03月</option>
+                <option value="04">04月</option>
+                <option value="05">05月</option>
+                <option value="06">06月</option>
+                <option value="07">07月</option>
+                <option value="08">08月</option>
+                <option value="09">09月</option>
+                <option value="10">10月</option>
+                <option value="11">11月</option>
+                <option value="12">12月</option>
+            </select>
+        </div>
+    </div>
     
     <div class="table-wrapper">
         <table>
@@ -40,41 +88,79 @@
                 </tr>
             </thead>
             <tbody id="rate-data">
-                <tr><td colspan="9">正在讀取資料...</td></tr>
+                <tr><td colspan="9">正在讀取雲端資料...</td></tr>
             </tbody>
         </table>
     </div>
 </div>
 
 <script>
+    let allData = []; // 儲存原始資料
+
     document.addEventListener("DOMContentLoaded", function() {
-        // 加入亂數參數避免瀏覽器快取舊資料
         fetch('data.json?' + new Date().getTime())
             .then(response => response.json())
             .then(data => {
-                const tableBody = document.getElementById('rate-data');
-                tableBody.innerHTML = ""; // 清空載入中訊息
-                
-                // 反轉陣列，讓最新日期在最上面
-                data.reverse().forEach(row => {
-                    const tr = document.createElement('tr');
-                    const cols = [
-                        row.date, 
-                        row.sunny_usd_buy, row.sunny_usd_sell, row.sunny_cny_buy, row.sunny_cny_sell,
-                        row.bot_usd_buy, row.bot_usd_sell, row.bot_cny_buy, row.bot_cny_sell
-                    ];
-                    cols.forEach(text => {
-                        const td = document.createElement('td');
-                        td.textContent = text;
-                        tr.appendChild(td);
-                    });
-                    tableBody.appendChild(tr);
-                });
+                allData = data.reverse(); // 最新日期排前面
+                initFilters(); // 初始化篩選選單
+                renderTable(allData); // 畫出表格
             })
             .catch(err => {
-                document.getElementById('rate-data').innerHTML = "<tr><td colspan='9' style='color:red;'>無法讀取 data.json，請確認 Python 程式是否已執行。</td></tr>";
+                document.getElementById('rate-data').innerHTML = "<tr><td colspan='9' style='color:red;'>無法讀取 data.json，請確認檔案是否存在。</td></tr>";
             });
+        
+        // 監聽篩選器變化
+        document.getElementById('yearFilter').addEventListener('change', filterData);
+        document.getElementById('monthFilter').addEventListener('change', filterData);
     });
+
+    function initFilters() {
+        const yearFilter = document.getElementById('yearFilter');
+        // 抓出資料裡所有的年份 (去重複)
+        const years = [...new Set(allData.map(item => item.date.split('-')[0]))];
+        
+        years.forEach(year => {
+            const option = document.createElement('option');
+            option.value = year;
+            option.textContent = year + "年";
+            yearFilter.appendChild(option);
+        });
+    }
+
+    function filterData() {
+        const selectedYear = document.getElementById('yearFilter').value;
+        const selectedMonth = document.getElementById('monthFilter').value;
+
+        const filtered = allData.filter(item => {
+            const [year, month, day] = item.date.split('-');
+            const yearMatch = (selectedYear === 'all') || (year === selectedYear);
+            const monthMatch = (selectedMonth === 'all') || (month === selectedMonth);
+            return yearMatch && monthMatch;
+        });
+
+        renderTable(filtered);
+    }
+
+    function renderTable(data) {
+        const tableBody = document.getElementById('rate-data');
+        tableBody.innerHTML = "";
+
+        if (data.length === 0) {
+            tableBody.innerHTML = "<tr><td colspan='9' class='no-data'>⚠️ 查無此區間的資料</td></tr>";
+            return;
+        }
+
+        data.forEach(row => {
+            const tr = document.createElement('tr');
+            [row.date, row.sunny_usd_buy, row.sunny_usd_sell, row.sunny_cny_buy, row.sunny_cny_sell,
+             row.bot_usd_buy, row.bot_usd_sell, row.bot_cny_buy, row.bot_cny_sell].forEach(text => {
+                const td = document.createElement('td');
+                td.textContent = text;
+                tr.appendChild(td);
+            });
+            tableBody.appendChild(tr);
+        });
+    }
 </script>
 
 </body>
