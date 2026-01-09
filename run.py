@@ -22,8 +22,8 @@ def clean_number(text):
     清洗工具：把 '即期買入匯率31.5280' 變回 '31.5280'
     """
     if not text: return "-"
-    # 只抓取「數字」與「小數點」
-    match = re.search(r'\d+\.\d+', text)
+    # 升級版：支援整數或小數 (例如 31 或 31.5 都能抓)
+    match = re.search(r'\d+(\.\d+)?', text)
     if match:
         return match.group(0)
     return text.strip()
@@ -53,11 +53,11 @@ def get_bot_rates():
     return res
 
 def get_sunny_rates():
-    """抓取陽信 (新版網址 + 智慧清洗)"""
+    """抓取陽信"""
     print("正在抓取陽信...")
     res = {"USD": ["-","-"], "CNY": ["-","-"]}
     try:
-        # ✅ 更新：使用公開的即時匯率查詢頁面
+        # 使用公開的即時匯率查詢頁面
         url = "https://www.sunnybank.com.tw/portal/pt/pt02003/PT02003Index.xhtml"
         resp = requests.get(url, headers=HEADERS, timeout=20)
         
@@ -69,31 +69,29 @@ def get_sunny_rates():
         rows = soup.find_all('tr')
         
         for row in rows:
-            # 取得整列文字，移除空白
             raw_text = row.get_text(strip=True)
             tds = row.find_all('td')
             
-            # 陽信新版表格通常是：幣別 | 現鈔買 | 現鈔賣 | 即期買(Index 3) | 即期賣(Index 4)
             if len(tds) >= 5:
-                # 抓美金
-                if ("美元" in raw_text or "USD" in raw_text):
-                    # 使用 clean_number 去除可能參雜的中文字
+                # 抓美金 (關鍵字增加：美元、美金、USD)
+                if ("美元" in raw_text or "美金" in raw_text or "USD" in raw_text):
                     buy = clean_number(tds[3].text)
                     sell = clean_number(tds[4].text)
-                    if buy and sell and buy != "-":
+                    # 只要不是 "-" 就收錄
+                    if buy != "-":
                         res["USD"] = [buy, sell]
                 
-                # 抓人民幣
+                # 抓人民幣 (關鍵字增加：人民幣、CNY)
                 if ("人民幣" in raw_text or "CNY" in raw_text):
                     buy = clean_number(tds[3].text)
                     sell = clean_number(tds[4].text)
-                    if buy and sell and buy != "-":
+                    if buy != "-":
                         res["CNY"] = [buy, sell]
 
-        if res["USD"][0] != "-":
-            print(f"✅ 陽信抓取成功: {res}")
+        if res["USD"][0] != "-" or res["CNY"][0] != "-":
+            print(f"✅ 陽信抓取結果: {res}")
         else:
-            print("⚠️ 陽信連線成功但未找到數值 (可能是網頁改版或無資料)")
+            print("⚠️ 陽信抓取但無數值 (請檢查 Log)")
 
     except Exception as e:
         print(f"❌ 陽信發生錯誤: {e}")
@@ -129,7 +127,6 @@ def main():
                 if content: history = json.load(f)
         except: pass
     
-    # 更新資料
     history = [d for d in history if d['date'] != date_str]
     history.append(new_data)
     
