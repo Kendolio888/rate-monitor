@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>匯率每日監控表</title>
+    <style>
+        body { font-family: "Microsoft JhengHei", sans-serif; background: #f4f4f4; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; background: #fff; padding: 20px; box-shadow: 0 0 10px rgba(0,0,0,0.1); border-radius: 8px; }
+        h2 { text-align: center; color: #333; }
+        .status { text-align: center; color: #666; font-size: 0.9em; margin-bottom: 10px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
+        th { background-color: #6a9e6f; color: white; white-space: nowrap; }
+        tr:nth-child(even) { background-color: #eafaf1; }
+        tr:hover { background-color: #d1f2eb; }
+        td:first-child { font-weight: bold; color: #444; }
+        .table-wrapper { overflow-x: auto; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>📈 每日匯率自動追蹤表</h2>
+    <div class="status">資料來源：data.json (由 Python 自動生成)</div>
+    
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>日期</th>
+                    <th>陽信USD買入</th>
+                    <th>陽信USD賣出</th>
+                    <th>陽信CNY買入</th>
+                    <th>陽信CNY賣出</th>
+                    <th>台銀USD買入</th>
+                    <th>台銀USD賣出</th>
+                    <th>台銀CNY買入</th>
+                    <th>台銀CNY賣出</th>
+                </tr>
+            </thead>
+            <tbody id="rate-data">
+                <tr><td colspan="9">正在讀取資料...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // 加入亂數參數避免瀏覽器快取舊資料
+        fetch('data.json?' + new Date().getTime())
+            .then(response => response.json())
+            .then(data => {
+                const tableBody = document.getElementById('rate-data');
+                tableBody.innerHTML = ""; // 清空載入中訊息
+                
+                // 反轉陣列，讓最新日期在最上面
+                data.reverse().forEach(row => {
+                    const tr = document.createElement('tr');
+                    const cols = [
+                        row.date, 
+                        row.sunny_usd_buy, row.sunny_usd_sell, row.sunny_cny_buy, row.sunny_cny_sell,
+                        row.bot_usd_buy, row.bot_usd_sell, row.bot_cny_buy, row.bot_cny_sell
+                    ];
+                    cols.forEach(text => {
+                        const td = document.createElement('td');
+                        td.textContent = text;
+                        tr.appendChild(td);
+                    });
+                    tableBody.appendChild(tr);
+                });
+            })
+            .catch(err => {
+                document.getElementById('rate-data').innerHTML = "<tr><td colspan='9' style='color:red;'>無法讀取 data.json，請確認 Python 程式是否已執行。</td></tr>";
+            });
+    });
+</script>
+
+</body>
+</html>
