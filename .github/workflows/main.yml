@@ -1,0 +1,36 @@
+name: 每日匯率更新機器人
+
+on:
+  schedule:
+    # 設定每天 UTC 01:30 (台灣時間 09:30) 執行
+    - cron: '30 1 * * *'
+  workflow_dispatch: # 讓你可以手動按按鈕測試
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # 給予寫入權限
+
+    steps:
+      - name: 下載程式碼 (Checkout)
+        uses: actions/checkout@v3
+
+      - name: 設定 Python 環境
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: 安裝套件
+        run: |
+          pip install -r requirements.txt
+
+      - name: 執行爬蟲 (Run Crawler)
+        run: |
+          python run.py
+
+      - name: 保存資料回 GitHub (Commit & Push)
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: "🤖 自動更新匯率資料"
+          file_pattern: data.json
