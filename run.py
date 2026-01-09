@@ -5,12 +5,12 @@ import os
 import re
 from datetime import datetime, timezone, timedelta
 import time
+import sys # 引入系統模組，用來強制停止程式
 
 # 設定台灣時間
 TW_TZ = timezone(timedelta(hours=8))
 DATA_FILE = 'data.json'
 
-# 偽裝 Header
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
@@ -18,34 +18,22 @@ HEADERS = {
 }
 
 def clean_number(text):
-    """清洗數字"""
     if not text: return "-"
     match = re.search(r'\d+(\.\d+)?', text)
     if match: return match.group(0)
     return text.strip()
 
 def get_bot_rates_and_date():
-    """
-    抓取台銀匯率，並同時抓取網頁上的「掛牌日期」
-    回傳: (匯率字典, 掛牌日期字串)
-    """
     print("正在抓取台銀資料與日期檢查...")
     res = {"USD": ["-","-"], "CNY": ["-","-"]}
-    board_date = None # 網頁上的掛牌日期
-
+    board_date = None
     try:
         resp = requests.get("https://rate.bot.com.tw/xrt?Lang=zh-TW", headers=HEADERS, timeout=10)
         soup = BeautifulSoup(resp.text, 'html.parser')
-
-        # 1. 抓取網頁上的掛牌時間 (通常在 class="time" 裡面，格式如 2024/05/23 16:00)
         time_span = soup.find('span', class_='time')
         if time_span:
-            full_time_str = time_span.text.strip()
-            # 只取日期部分 YYYY/MM/DD
-            board_date = full_time_str.split(' ')[0].replace('/', '-') 
+            board_date = time_span.text.strip().split(' ')[0].replace('/', '-') 
             print(f"🔎 台銀網頁掛牌日期: {board_date}")
-
-        # 2. 抓取匯率
         for row in soup.find_all('tr'):
             text = row.text.strip()
             if "美金" in text:
@@ -58,65 +46,44 @@ def get_bot_rates_and_date():
                     row.find('td', {'data-table': '本行即期買入'}).text.strip(),
                     row.find('td', {'data-table': '本行即期賣出'}).text.strip()
                 ]
-        print(f"✅ 台銀抓取成功: {res}")
     except Exception as e:
         print(f"❌ 台銀失敗: {e}")
-    
     return res, board_date
 
 def get_sunny_rates():
-    """抓取陽信 (維持原邏輯)"""
     print("正在抓取陽信...")
     res = {"USD": ["-","-"], "CNY": ["-","-"]}
     try:
         url = "https://www.sunnybank.com.tw/portal/pt/pt02003/PT02003Index.xhtml"
         resp = requests.get(url, headers=HEADERS, timeout=20)
-        
         if resp.status_code != 200: return res
-
         soup = BeautifulSoup(resp.text, 'html.parser')
         for row in soup.find_all('tr'):
             raw_text = row.get_text(strip=True)
             tds = row.find_all('td')
-            
             if len(tds) >= 5:
                 if ("美元" in raw_text or "美金" in raw_text or "USD" in raw_text):
                     buy = clean_number(tds[3].text)
                     sell = clean_number(tds[4].text)
                     if buy != "-": res["USD"] = [buy, sell]
-                
                 if ("人民幣" in raw_text or "CNY" in raw_text):
                     buy = clean_number(tds[3].text)
                     sell = clean_number(tds[4].text)
                     if buy != "-": res["CNY"] = [buy, sell]
-
-        if res["USD"][0] != "-" or res["CNY"][0] != "-":
-            print(f"✅ 陽信抓取結果: {res}")
-        else:
-            print("⚠️ 陽信抓取但無數值")
-
     except Exception as e:
         print(f"❌ 陽信發生錯誤: {e}")
-    
     return res
 
 def main():
-    # 取得今天日期 (台灣時間)
     today_obj = datetime.now(TW_TZ)
     today_str = today_obj.strftime('%Y-%m-%d')
     print(f"📅 系統執行日期: {today_str}")
 
-    # 1. 執行台銀抓取 (包含日期檢查)
     bot_res, bot_board_date = get_bot_rates_and_date()
-    
-    # --- 關鍵修改：嚴格日期核對 ---
-    # 如果台銀網頁上的日期，不等於今天的日期，就代表今天沒開市 (可能是國定假日或週末)
     if bot_board_date and bot_board_date != today_str:
         print(f"🛑 停止更新：台銀掛牌日期 ({bot_board_date}) 與今日 ({today_str}) 不符。")
-        print("💡 推測原因：今日為假日或尚未開盤。")
-        return # 直接結束，不執行後續動作
-    
-    # 2. 如果日期吻合，才繼續抓陽信
+        return
+
     time.sleep(2)
     sunny_res = get_sunny_rates()
     
@@ -132,16 +99,25 @@ def main():
         "bot_cny_sell": bot_res["CNY"][1]
     }
 
-    # 3. 讀寫資料庫
+    # --- 安全讀檔機制 (修改重點) ---
     history = []
     if os.path.exists(DATA_FILE):
         try:
             with open(DATA_FILE, 'r', encoding='utf-8') as f:
                 content = f.read()
-                if content: history = json.load(f)
-        except: pass
-    
-    # 移除重複 (保險起見)
+                if content.strip(): # 確保不是空檔
+                    history = json.loads(content) # 使用 loads 來測試格式
+        except json.JSONDecodeError as e:
+            # 🚨 重大警告：如果格式錯了，程式直接自殺，保護檔案不被覆蓋
+            print(f"💥 嚴重錯誤：data.json 格式損毀或語法錯誤！")
+            print(f"錯誤訊息：{e}")
+            print("🛑 為了保護資料，程式已強制停止，請手動修正 data.json 格式後再試。")
+            sys.exit(1) # 強制退出，回報錯誤
+        except Exception as e:
+            print(f"💥 讀取檔案發生未預期錯誤：{e}")
+            sys.exit(1)
+
+    # 移除重複
     history = [d for d in history if d['date'] != today_str]
     history.append(new_data)
     
