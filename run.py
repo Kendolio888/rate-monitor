@@ -24,6 +24,14 @@ def clean_number(text):
     if match: return match.group(0)
     return text.strip()
 
+def format_to_4_decimal(val):
+    """助手函式：將數值補足小數點後四位，若為 '-' 則維持原樣"""
+    if val == "-": return "-"
+    try:
+        return "{:.4f}".format(float(val))
+    except (ValueError, TypeError):
+        return val
+
 def get_bot_rates():
     print("正在抓取台銀資料...")
     res = {"USD": ["-","-"], "CNY": ["-","-"]}
@@ -73,7 +81,8 @@ def get_sunny_rates():
 def main():
     today_obj = datetime.now(TW_TZ)
     today_str = today_obj.strftime('%Y-%m-%d')
-    print(f"📅 系統執行日期: {today_str}")
+    update_time_str = today_obj.strftime('%H:%M:%S') # 24小時制時分秒
+    print(f"📅 系統執行日期: {today_str} {update_time_str}")
 
     # --- 假日判斷邏輯 ---
     tw_holidays = holidays.Taiwan(years=today_obj.year)
@@ -82,21 +91,22 @@ def main():
         print(f"😴 今日偵測為休假日 ({reason})，機器人休假中，不進行更新。")
         return
 
-    # 抓取資料 (不再進行官網掛牌日期比對)
+    # 抓取資料
     bot_res = get_bot_rates()
     time.sleep(2)
     sunny_res = get_sunny_rates()
     
     new_data = {
         "date": today_str,
-        "sunny_usd_buy": sunny_res["USD"][0], 
-        "sunny_usd_sell": sunny_res["USD"][1],
-        "sunny_cny_buy": sunny_res["CNY"][0], 
-        "sunny_cny_sell": sunny_res["CNY"][1],
-        "bot_usd_buy": bot_res["USD"][0], 
-        "bot_usd_sell": bot_res["USD"][1],
-        "bot_cny_buy": bot_res["CNY"][0], 
-        "bot_cny_sell": bot_res["CNY"][1]
+        "update_time": update_time_str,
+        "sunny_usd_buy": format_to_4_decimal(sunny_res["USD"][0]), 
+        "sunny_usd_sell": format_to_4_decimal(sunny_res["USD"][1]),
+        "sunny_cny_buy": format_to_4_decimal(sunny_res["CNY"][0]), 
+        "sunny_cny_sell": format_to_4_decimal(sunny_res["CNY"][1]),
+        "bot_usd_buy": format_to_4_decimal(bot_res["USD"][0]), 
+        "bot_usd_sell": format_to_4_decimal(bot_res["USD"][1]),
+        "bot_cny_buy": format_to_4_decimal(bot_res["CNY"][0]), 
+        "bot_cny_sell": format_to_4_decimal(bot_res["CNY"][1])
     }
 
     # --- 安全讀檔機制 ---
