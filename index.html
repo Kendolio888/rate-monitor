@@ -24,7 +24,7 @@
         .filter-box select { padding: 8px; font-size: 16px; border: 1px solid #ccc; border-radius: 4px; }
         .filter-box label { font-weight: bold; color: #444; }
 
-        /* --- 表格區塊樣式 (本次修改重點) --- */
+        /* --- 表格區塊樣式 --- */
         .table-wrapper { 
             /* 1. 設定最大高度，讓資料太長時出現卷軸 */
             max-height: 70vh; /* 佔據視窗高度的 70% */
@@ -119,11 +119,10 @@
                     <th>台銀USD賣出</th>
                     <th>台銀CNY買入</th>
                     <th>台銀CNY賣出</th>
-                </tr>
+                    <th>更新時間</th> </tr>
             </thead>
             <tbody id="rate-data">
-                <tr><td colspan="9">正在讀取雲端資料...</td></tr>
-            </tbody>
+                <tr><td colspan="10">正在讀取雲端資料...</td></tr> </tbody>
         </table>
     </div>
 </div>
@@ -136,10 +135,6 @@
             .then(response => response.json())
             .then(data => {
                 // 如果原始資料是舊在上面，這裡要 reverse 變成新在上面
-                // 如果你的 data.json 已經手動整理過順序，請確認顯示是否正確
-                // 這裡假設我們要把日期最新的顯示在最上面
-                
-                // 簡易判斷：如果第一筆資料日期比最後一筆舊，代表是「舊->新」排序，我們就反轉它
                 if(data.length > 1) {
                     let firstDate = new Date(data[0].date);
                     let lastDate = new Date(data[data.length-1].date);
@@ -153,7 +148,7 @@
                 renderTable(allData);
             })
             .catch(err => {
-                document.getElementById('rate-data').innerHTML = "<tr><td colspan='9' style='color:red;'>無法讀取 data.json，請確認檔案是否存在。</td></tr>";
+                document.getElementById('rate-data').innerHTML = "<tr><td colspan='10' style='color:red;'>無法讀取 data.json，請確認檔案是否存在。</td></tr>";
             });
         
         document.getElementById('yearFilter').addEventListener('change', filterData);
@@ -191,16 +186,17 @@
         tableBody.innerHTML = "";
 
         if (data.length === 0) {
-            tableBody.innerHTML = "<tr><td colspan='9' class='no-data'>⚠️ 查無此區間的資料</td></tr>";
+            tableBody.innerHTML = "<tr><td colspan='10' class='no-data'>⚠️ 查無此區間的資料</td></tr>";
             return;
         }
 
         data.forEach(row => {
             const tr = document.createElement('tr');
+            // 將新欄位 row.update_time 加入陣列最後方
             [row.date, row.sunny_usd_buy, row.sunny_usd_sell, row.sunny_cny_buy, row.sunny_cny_sell,
-             row.bot_usd_buy, row.bot_usd_sell, row.bot_cny_buy, row.bot_cny_sell].forEach(text => {
+             row.bot_usd_buy, row.bot_usd_sell, row.bot_cny_buy, row.bot_cny_sell, row.update_time].forEach(text => {
                 const td = document.createElement('td');
-                td.textContent = text;
+                td.textContent = text || "-"; // 防呆處理，若無時間則顯示 -
                 tr.appendChild(td);
             });
             tableBody.appendChild(tr);
