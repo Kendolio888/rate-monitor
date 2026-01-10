@@ -6,6 +6,7 @@ import re
 from datetime import datetime, timezone, timedelta
 import time
 import sys # 引入系統模組，用來強制停止程式
+import holidays # 引入假日套件
 
 # 設定台灣時間
 TW_TZ = timezone(timedelta(hours=8))
@@ -23,17 +24,12 @@ def clean_number(text):
     if match: return match.group(0)
     return text.strip()
 
-def get_bot_rates_and_date():
-    print("正在抓取台銀資料與日期檢查...")
+def get_bot_rates():
+    print("正在抓取台銀資料...")
     res = {"USD": ["-","-"], "CNY": ["-","-"]}
-    board_date = None
     try:
         resp = requests.get("https://rate.bot.com.tw/xrt?Lang=zh-TW", headers=HEADERS, timeout=10)
         soup = BeautifulSoup(resp.text, 'html.parser')
-        time_span = soup.find('span', class_='time')
-        if time_span:
-            board_date = time_span.text.strip().split(' ')[0].replace('/', '-') 
-            print(f"🔎 台銀網頁掛牌日期: {board_date}")
         for row in soup.find_all('tr'):
             text = row.text.strip()
             if "美金" in text:
@@ -48,7 +44,7 @@ def get_bot_rates_and_date():
                 ]
     except Exception as e:
         print(f"❌ 台銀失敗: {e}")
-    return res, board_date
+    return res
 
 def get_sunny_rates():
     print("正在抓取陽信...")
@@ -79,11 +75,15 @@ def main():
     today_str = today_obj.strftime('%Y-%m-%d')
     print(f"📅 系統執行日期: {today_str}")
 
-    bot_res, bot_board_date = get_bot_rates_and_date()
-    if bot_board_date and bot_board_date != today_str:
-        print(f"🛑 停止更新：台銀掛牌日期 ({bot_board_date}) 與今日 ({today_str}) 不符。")
+    # --- 假日判斷邏輯 ---
+    tw_holidays = holidays.Taiwan(years=today_obj.year)
+    if today_obj.weekday() >= 5 or today_obj in tw_holidays:
+        reason = "週末" if today_obj.weekday() >= 5 else tw_holidays.get(today_obj)
+        print(f"😴 今日偵測為休假日 ({reason})，機器人休假中，不進行更新。")
         return
 
+    # 抓取資料 (不再進行官網掛牌日期比對)
+    bot_res = get_bot_rates()
     time.sleep(2)
     sunny_res = get_sunny_rates()
     
@@ -99,20 +99,19 @@ def main():
         "bot_cny_sell": bot_res["CNY"][1]
     }
 
-    # --- 安全讀檔機制 (修改重點) ---
+    # --- 安全讀檔機制 ---
     history = []
     if os.path.exists(DATA_FILE):
         try:
             with open(DATA_FILE, 'r', encoding='utf-8') as f:
                 content = f.read()
-                if content.strip(): # 確保不是空檔
-                    history = json.loads(content) # 使用 loads 來測試格式
+                if content.strip():
+                    history = json.loads(content)
         except json.JSONDecodeError as e:
-            # 🚨 重大警告：如果格式錯了，程式直接自殺，保護檔案不被覆蓋
             print(f"💥 嚴重錯誤：data.json 格式損毀或語法錯誤！")
             print(f"錯誤訊息：{e}")
             print("🛑 為了保護資料，程式已強制停止，請手動修正 data.json 格式後再試。")
-            sys.exit(1) # 強制退出，回報錯誤
+            sys.exit(1)
         except Exception as e:
             print(f"💥 讀取檔案發生未預期錯誤：{e}")
             sys.exit(1)
@@ -123,7 +122,7 @@ def main():
     
     with open(DATA_FILE, 'w', encoding='utf-8') as f:
         json.dump(history, f, ensure_ascii=False, indent=4)
-    print("🚀 資料確認為最新，更新完畢！")
+    print("🚀 資料抓取完畢，已成功更新至 data.json！")
 
 if __name__ == "__main__":
     main()
