@@ -6,6 +6,7 @@ import re
 from datetime import datetime, timezone, timedelta
 import time
 import sys # 引入系統模組，用來強制停止程式
+import holidays # 引入假日套件
 
 # 設定台灣時間
 TW_TZ = timezone(timedelta(hours=8))
@@ -82,6 +83,13 @@ def main():
     today_str = today_obj.strftime('%Y-%m-%d')
     update_time_str = today_obj.strftime('%H:%M:%S') # 24小時制時分秒
     print(f"📅 系統執行日期: {today_str} {update_time_str}")
+
+    # --- 假日判斷邏輯 ---
+    tw_holidays = holidays.Taiwan(years=today_obj.year)
+    if today_obj.weekday() >= 5 or today_obj in tw_holidays:
+        reason = "週末" if today_obj.weekday() >= 5 else tw_holidays.get(today_obj)
+        print(f"😴 今日偵測為休假日 ({reason})，機器人休假中，不進行更新。")
+        return
 
     # 抓取資料
     bot_res = get_bot_rates()
