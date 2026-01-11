@@ -2,8 +2,8 @@ name: 每日匯率更新機器人
 
 on:
   schedule:
-    # 設定每天 UTC 02:17 (台灣時間 10:17) 執行
-    - cron: '17 2 * * *'
+    # 設定每天 UTC 01:17 (台灣時間 09:17) 執行
+    - cron: '17 1 * * *'
   workflow_dispatch: # 讓你可以手動按按鈕測試
 
 jobs:
