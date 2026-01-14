@@ -333,13 +333,13 @@
     },
     {
         "date": "2026-01-14",
-        "update_time": "10:10:27",
-        "sunny_usd_buy": "31.6260",
-        "sunny_usd_sell": "31.7260",
+        "update_time": "12:16:43",
+        "sunny_usd_buy": "31.6000",
+        "sunny_usd_sell": "31.7000",
         "sunny_cny_buy": "4.5060",
         "sunny_cny_sell": "4.5760",
-        "bot_usd_buy": "31.6250",
-        "bot_usd_sell": "31.7250",
+        "bot_usd_buy": "31.6000",
+        "bot_usd_sell": "31.7000",
         "bot_cny_buy": "4.5140",
         "bot_cny_sell": "4.5640"
     }
