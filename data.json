@@ -510,5 +510,17 @@
         "bot_usd_sell": "31.6500",
         "bot_cny_buy": "4.5300",
         "bot_cny_sell": "4.5800"
+    },
+    {
+        "date": "2026-02-04",
+        "update_time": "10:05:23",
+        "sunny_usd_buy": "31.5240",
+        "sunny_usd_sell": "31.6240",
+        "sunny_cny_buy": "4.5220",
+        "sunny_cny_sell": "4.5920",
+        "bot_usd_buy": "31.5250",
+        "bot_usd_sell": "31.6250",
+        "bot_cny_buy": "4.5300",
+        "bot_cny_sell": "4.5800"
     }
 ]
