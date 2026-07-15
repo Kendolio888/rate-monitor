@@ -1482,5 +1482,17 @@
         "bot_usd_sell": "-",
         "bot_cny_buy": "-",
         "bot_cny_sell": "-"
+    },
+    {
+        "date": "2026-07-15",
+        "update_time": "10:05:21",
+        "sunny_usd_buy": "-",
+        "sunny_usd_sell": "-",
+        "sunny_cny_buy": "-",
+        "sunny_cny_sell": "-",
+        "bot_usd_buy": "-",
+        "bot_usd_sell": "-",
+        "bot_cny_buy": "-",
+        "bot_cny_sell": "-"
     }
 ]
